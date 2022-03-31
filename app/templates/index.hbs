@@ -1,0 +1,10 @@
+{{#let (service 'github') as |github|}}
+
+  {{#if github.isLoggedIn}}
+    You are logged in.<br />
+    <button type='button' {{on 'click' github.logout}}>Logout</button>
+  {{else}}
+    You are not logged in.<br />
+    <button type='button' {{on 'click' github.login}}>Login</button>
+  {{/if}}
+{{/let}}

@@ -1,5 +1,8 @@
 'use strict';
 
+// Load .env
+require('dotenv').config();
+
 const EmberApp = require('ember-cli/lib/broccoli/ember-app');
 
 module.exports = function (defaults) {
@@ -22,6 +25,7 @@ module.exports = function (defaults) {
 
   const { Webpack } = require('@embroider/webpack');
   return require('@embroider/compat').compatBuild(app, Webpack, {
+    staticAppPaths: ['service-workers'],
     skipBabel: [
       {
         package: 'qunit',

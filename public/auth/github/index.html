@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Sign in with GitHub</title>
+  <link href="/assets/pushrelease.css" rel="stylesheet">
+</head>
+
+<body>
+  <h1>Sign in with GitHub</h1>
+  <h2>You have been sent to <code>/auth/github</code>.</h2>
+  <form id="token-form">
+    <div>
+      <label for="token">Please provide a GitHub token:</label>
+      <input type="text" id="token" name="token" size="40">
+      <button>Login</button>
+      <p id="token-status" style="display: none"></p>
+    </div>
+
+    <p>
+      Alternatively, <button id="use-fixtures" type="button">proceed without a token</button>
+      and develop using fixtures.
+    </p>
+  </form>
+  <h3>Detailed Explanation</h3>
+  <p>
+    On production, this URL would have been handled by a Cloudflare worker
+    which handles the
+    <a href="https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps#web-application-flow"
+      target="_blank">
+      GitHub OAuth flow</a>:
+  </p>
+  <ol>
+    <li>
+      The Cloudflare worker redirect the user to a GitHub sign in URL.
+    </li>
+    <li>
+      Upon a successful login and agreeing to authorize our app on the GitHub
+      side, the user is redirected back to <code>/auth/github/callback</code>,
+      which would also be handled by the Cloudflare worker.
+    </li>
+    <li>
+      The request from GitHub included a temporary code. The worker will make
+      an internal request to GitHub, along with our client ID and secret (which
+      is why this has to happen server-side), redeeming the temporary code for
+      an GitHub token.
+    </li>
+    <li>
+      Once the worker has the token, it returns a simple HTML page with a
+      <code>&lt;script&gt;</code> tag that stores the token into
+      <code>sessionStorage</code> as <code>GITHUB_TOKEN</code>, and then
+      redirect back to the app at <code>/</code>.
+    </li>
+  </ol>
+  <p>
+    This page is a stand-in to bypass most of those steps in development.
+    Instead, <a
+      href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
+      target="_blank">obtain a token directly from GitHub</a> and provide it
+    above. The form will simulate the final step of the OAuth flow and pass the
+    token to the app.
+  </p>
+  <script type="module">
+    const tokenForm = document.getElementById('token-form');
+    const tokenInput = document.getElementById('token');
+    const tokenStatus = document.getElementById('token-status');
+    const useFixturesButton = document.getElementById('use-fixtures');
+
+    function debounce(fn, timeout) {
+      let id = null;
+
+      return function (...args) {
+        if (id !== null) {
+          clearTimeout(id);
+        }
+
+        id = setTimeout(() => {
+          id = null;
+          fn.call(this, ...args)
+        }, timeout);
+      };
+    }
+
+    async function verifyToken() {
+      let token = tokenInput.value.trim();
+
+      if (!token) {
+        tokenStatus.innerText = '';
+        tokenStatus.style.display = 'none';
+        return;
+      }
+
+      tokenStatus.innerText = 'Verifying token...';
+      tokenStatus.style.display = 'block';
+
+      let response = await fetch('https://api.github.com/user', {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+          Accept: 'application/vnd.github.v3+json',
+          Authorization: `token ${token}`,
+        },
+      });
+
+      let login = null;
+
+      if (response.ok) {
+        let data = await response.json();
+        login = data.login ?? null;
+      }
+
+      if (token !== tokenInput.value) {
+        return;
+      } else if (login) {
+        tokenStatus.innerText = `This token belongs to @${login}.`;
+      } else {
+        tokenStatus.innerText = 'This token is invalid.';
+      }
+    }
+
+    let callback = debounce(verifyToken, 500);
+
+    tokenInput.addEventListener('input', callback);
+    tokenInput.addEventListener('change', callback);
+
+    let url = new URL(location.href);
+
+    if (url.searchParams.has('token')) {
+      tokenInput.value = url.searchParams.get('token');
+      verifyToken();
+    }
+
+    tokenForm.addEventListener('submit', e => {
+      e.preventDefault();
+      sessionStorage.setItem('GITHUB_TOKEN', tokenInput.value);
+      location.href = '/';
+    });
+
+    useFixturesButton.addEventListener('click', e => {
+      e.preventDefault();
+      sessionStorage.setItem('GITHUB_TOKEN', 'FIXTURES');
+      location.href = '/';
+    });
+  </script>
+</body>
+
+</html>
